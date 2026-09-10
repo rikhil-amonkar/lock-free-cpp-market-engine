@@ -1,2 +1,8 @@
 # Binaries
 *.out
+
+# ITCH Data
+*.gz
+*.bin
+sample.bin
+20190730.BX_ITCH_50
