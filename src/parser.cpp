@@ -79,8 +79,8 @@ std::string read_ascii_field(std::vector<char>& buffer, size_t& offset, size_t l
 
 int main() {
 
-    const std::string FILENAME = "./sample.bin";
-    // const std::string FILENAME = "../data/20190730.BX_ITCH_50.bin";
+    // const std::string FILENAME = "./sample.bin";
+    const std::string FILENAME = "../data/20190730.BX_ITCH_50.bin";
     const int BYTES_IN_MB = 1000000;
 
     std::ifstream file(FILENAME, std::ios::binary | std::ios::ate);  // for bin file + move ptr to end
@@ -108,7 +108,7 @@ int main() {
     */
 
     while (remainingBytes > 1) {
-        int lengthPrefix = extract_length_prefix(buffer, offset);
+        int lengthPrefix = read_16_bit_int_be(buffer, offset);
         if (offset + lengthPrefix > fileSize) {  // invalid indexing check
             std::cerr << "Byte index is out of range.\n";
             break;
@@ -124,11 +124,11 @@ int main() {
             long long timestamp = read_48_bit_int_be(buffer, offset);
             char eventCode = read_8_bit_int_be(buffer, offset);
 
-            std::cout << std::format(
-                "{} {} {} {} {}\n",
-                messageType, stockLocate, trackNumber,
-                timestamp, eventCode
-            );
+            // std::cout << std::format(
+            //     "{} {} {} {} {}\n",
+            //     messageType, stockLocate, trackNumber,
+            //     timestamp, eventCode
+            // );
             if (eventCode == 'C') {
                 std::cout << "End of day.\n";
             }
@@ -192,12 +192,51 @@ int main() {
             char printable = read_8_bit_int_be(buffer, offset);
             int priceTradedAt = read_32_bit_int_be(buffer, offset);
 
-            std::cout << std::format(
-                "{} {} {} {} {} {} {} {} {}\n",
-                messageType, stockLocate, trackNumber,
-                timestamp, orderRefNumber, sharesTraded,
-                matchId, printable, priceTradedAt
-            );
+            // std::cout << std::format(
+            //     "{} {} {} {} {} {} {} {} {}\n",
+            //     messageType, stockLocate, trackNumber,
+            //     timestamp, orderRefNumber, sharesTraded,
+            //     matchId, printable, priceTradedAt
+            // );
+        }
+        else if (messageType == 'X') {  // cancel order
+            int stockLocate = read_16_bit_int_be(buffer, offset);
+            int trackNumber = read_16_bit_int_be(buffer, offset);
+            long long timestamp = read_48_bit_int_be(buffer, offset);
+            long long orderRefNumber = read_64_bit_int_be(buffer, offset);
+            int cancelledShares = read_32_bit_int_be(buffer, offset);
+
+            // std::cout << std::format(
+            //     "{} {} {} {} {} {}\n",
+            //     messageType, stockLocate, trackNumber,
+            //     timestamp, orderRefNumber, cancelledShares
+            // );
+        }
+        else if (messageType == 'D') {  // delete order
+            int stockLocate = read_16_bit_int_be(buffer, offset);
+            int trackNumber = read_16_bit_int_be(buffer, offset);
+            long long timestamp = read_48_bit_int_be(buffer, offset);
+            long long orderRefNumber = read_64_bit_int_be(buffer, offset);
+
+            // std::cout << std::format(
+            //     "{} {} {} {} {}\n",
+            //     messageType, stockLocate, trackNumber,
+            //     timestamp, orderRefNumber
+            // );
+        }
+        else if (messageType == 'U') {  // replace order
+            int stockLocate = read_16_bit_int_be(buffer, offset);
+            int trackNumber = read_16_bit_int_be(buffer, offset);
+            long long timestamp = read_48_bit_int_be(buffer, offset);
+            long long initOrderRefNumber = read_64_bit_int_be(buffer, offset);
+            long long newOrderRefNumber = read_64_bit_int_be(buffer, offset);
+            int newShares = read_32_bit_int_be(buffer, offset);
+            int newPrice = read_32_bit_int_be(buffer, offset);
+
+            // std::cout << std::format(
+            //     "{} {} {} {} {} {} {}\n",
+            //     messageType, stockLocate, trackNumber, timestamp, newOrderRefNumber, newShares, newPrice
+            // );
         }
 
         offset = messageStart + lengthPrefix;

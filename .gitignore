@@ -4,5 +4,6 @@
 # ITCH Data
 *.gz
 *.bin
+*.txt
 sample.bin
 20190730.BX_ITCH_50
