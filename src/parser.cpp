@@ -5,19 +5,7 @@
 #include <format>
 #include <algorithm>
 
-int extract_length_prefix(std::vector<char>& buffer, size_t& offset) {
-    std::string hex = {
-        std::format(  // prevent sign-extension with char to hex
-            "{:02x}{:02x}\n",
-            static_cast<unsigned char>(buffer[offset]),
-            static_cast<unsigned char>(buffer[offset + 1])
-        )
-    };
-    int size = std::stoi(hex, nullptr, 16);  // hex to dec
-    offset += 2;
-
-    return size;
-}
+#include "messageTypes.h"
 
 long long read_64_bit_int_be(std::vector<char>& buffer, size_t& offset) {
     long long value = 0;
@@ -40,7 +28,7 @@ long long read_48_bit_int_be(std::vector<char>& buffer, size_t& offset) {
 }
 
 int read_32_bit_int_be(std::vector<char>& buffer, size_t& offset) {
-    long long value = 0;
+    int value = 0;
     for (size_t i = 0; i < 4; i++) {
         value = (value << 8) | static_cast<unsigned char>(buffer[offset + i]);
     }
@@ -79,8 +67,8 @@ std::string read_ascii_field(std::vector<char>& buffer, size_t& offset, size_t l
 
 int main() {
 
-    // const std::string FILENAME = "./sample.bin";
-    const std::string FILENAME = "../data/20190730.BX_ITCH_50.bin";
+    const std::string FILENAME = "./sample.bin";
+    // const std::string FILENAME = "../data/20190730.BX_ITCH_50.bin";
     const int BYTES_IN_MB = 1000000;
 
     std::ifstream file(FILENAME, std::ios::binary | std::ios::ate);  // for bin file + move ptr to end
@@ -106,6 +94,15 @@ int main() {
     00000020: 2020 204e 2000 0000 644e 435a 2050 4e20     N ...dNCZ PN
     00000030: 314e 0000 0000 4e00 1948 0001 0000 0a65  1N....N..H.....e
     */
+
+    std::vector<SystemEvent> sysEvents;
+    std::vector<AddOrder> addOrders;
+    std::vector<AddOrderMPID> addOrdersMPID;
+    std::vector<OrderExecuted> execOrders;
+    std::vector<OrderExecutedPrice> priceExecOrders;
+    std::vector<OrderCancel> cancelOrders;
+    std::vector<OrderDelete> deleteOrders;
+    std::vector<OrderReplace> replaceOrders;
 
     while (remainingBytes > 1) {
         int lengthPrefix = read_16_bit_int_be(buffer, offset);
@@ -139,7 +136,7 @@ int main() {
             long long timestamp = read_48_bit_int_be(buffer, offset);
             long long orderRefNumber = read_64_bit_int_be(buffer, offset);
             char side = read_8_bit_int_be(buffer, offset);
-            int shared = read_32_bit_int_be(buffer, offset);
+            int shares = read_32_bit_int_be(buffer, offset);
             std::string stockName = read_ascii_field(buffer, offset, 8);
             int price = read_32_bit_int_be(buffer, offset);
 
@@ -147,7 +144,7 @@ int main() {
             //     "{} {} {} {} {} {} {} {}\n",
             //     messageType, stockLocate, trackNumber,
             //     timestamp, orderRefNumber, side,
-            //     shared, stockName, price
+            //     shares, stockName, price
             // );
         }
         else if (messageType == 'F') {  // add order with mpid
@@ -156,7 +153,7 @@ int main() {
             long long timestamp = read_48_bit_int_be(buffer, offset);
             long long orderRefNumber = read_64_bit_int_be(buffer, offset);
             char side = read_8_bit_int_be(buffer, offset);
-            int shared = read_32_bit_int_be(buffer, offset);
+            int shares = read_32_bit_int_be(buffer, offset);
             std::string stockName = read_ascii_field(buffer, offset, 8);
             int price = read_32_bit_int_be(buffer, offset);
             std::string mpid = read_ascii_field(buffer, offset, 4);
@@ -165,7 +162,7 @@ int main() {
             //     "{} {} {} {} {} {} {} {} {}\n",
             //     messageType, stockLocate, trackNumber,
             //     timestamp, orderRefNumber, side,
-            //     shared, stockName, price, mpid
+            //     shares, stockName, price, mpid
             // );
         }
         else if (messageType == 'E') {  // execute order
@@ -204,12 +201,12 @@ int main() {
             int trackNumber = read_16_bit_int_be(buffer, offset);
             long long timestamp = read_48_bit_int_be(buffer, offset);
             long long orderRefNumber = read_64_bit_int_be(buffer, offset);
-            int cancelledShares = read_32_bit_int_be(buffer, offset);
+            int canceledShares = read_32_bit_int_be(buffer, offset);
 
             // std::cout << std::format(
             //     "{} {} {} {} {} {}\n",
             //     messageType, stockLocate, trackNumber,
-            //     timestamp, orderRefNumber, cancelledShares
+            //     timestamp, orderRefNumber, canceledShares
             // );
         }
         else if (messageType == 'D') {  // delete order
