@@ -19,6 +19,9 @@ using Quantity = std::int32_t;
 using Price = std::int32_t;
 using ticker = std::string;
 using MPID = std::string;
+using Side = char;
+using EventCode = char;
+using Printable = char;
 
 int main() {
 
@@ -73,7 +76,7 @@ int main() {
             StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            char eventCode = read_8_bit_int_be(buffer, offset);
+            EventCode eventCode = read_8_bit_int_be(buffer, offset);
 
             SystemEvent systemEventMessage(stockIndex, trackNumber, timestamp, eventCode);
             systemEvents.push_back(systemEventMessage);
@@ -87,7 +90,7 @@ int main() {
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
             OrderId orderId = read_64_bit_int_be(buffer, offset);
-            char side = read_8_bit_int_be(buffer, offset);
+            Side side = read_8_bit_int_be(buffer, offset);
             Quantity shares = read_32_bit_int_be(buffer, offset);
             Ticker ticker = read_ascii_field(buffer, offset, 8);
             Price price = read_32_bit_int_be(buffer, offset);
@@ -114,7 +117,7 @@ int main() {
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
             OrderId orderId = read_64_bit_int_be(buffer, offset);
-            char side = read_8_bit_int_be(buffer, offset);
+            Side side = read_8_bit_int_be(buffer, offset);
             Quantity shares = read_32_bit_int_be(buffer, offset);
             Ticker ticker = read_ascii_field(buffer, offset, 8);
             Price price = read_32_bit_int_be(buffer, offset);
@@ -158,7 +161,7 @@ int main() {
             OrderId orderId = read_64_bit_int_be(buffer, offset);
             Quantity sharesTraded = read_32_bit_int_be(buffer, offset);
             MatchId matchId = read_64_bit_int_be(buffer, offset);
-            char printable = read_8_bit_int_be(buffer, offset);
+            Printable printable = read_8_bit_int_be(buffer, offset);
             Price priceTradedAt = read_32_bit_int_be(buffer, offset);
 
             OrderExecutedPrice executedOrderPriceMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId, printable, priceTradedAt);

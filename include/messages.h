@@ -13,6 +13,9 @@ using Quantity = std::int32_t;
 using Price = std::int32_t;
 using Ticker = std::string;
 using MPID = std::string;
+using Side = char;
+using EventCode = char;
+using Printable = char;
 
 struct BaseMessage {
     std::string type;
@@ -23,9 +26,9 @@ struct SystemEvent {
     StockIndex stockIndex;
     TrackNumber trackNumber;
     Timestamp timestamp;
-    char eventCode;
+    EventCode eventCode;
 
-    SystemEvent(StockIndex s, TrackNumber t, Timestamp time, char e)
+    SystemEvent(StockIndex s, TrackNumber t, Timestamp time, EventCode e)
         : stockIndex(s)
         , trackNumber(t)
         , timestamp(time)
@@ -38,12 +41,12 @@ struct AddOrder {
     TrackNumber trackNumber;
     Timestamp timestamp;
     OrderId orderId;
-    char side;
+    Side side;
     Quantity shares;
     Ticker ticker;
     Price price;
 
-    AddOrder(StockIndex s, TrackNumber t, Timestamp time, OrderId id, char side, Quantity q, Ticker tick, Price p)
+    AddOrder(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Side side, Quantity q, Ticker tick, Price p)
         : stockIndex(s)
         , trackNumber(t)
         , timestamp(time)
@@ -60,13 +63,13 @@ struct AddOrderMPID {
     TrackNumber trackNumber;
     Timestamp timestamp;
     OrderId orderId;
-    char side;
+    Side side;
     Quantity shares;
     Ticker ticker;
     Price price;
     MPID mpid;
 
-    AddOrderMPID(StockIndex s, TrackNumber t, Timestamp time, OrderId id, char side, Quantity q, Ticker tick, Price p, MPID m)
+    AddOrderMPID(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Side side, Quantity q, Ticker tick, Price p, MPID m)
         : stockIndex(s)
         , trackNumber(t)
         , timestamp(time)
@@ -104,10 +107,10 @@ struct OrderExecutedPrice {
     OrderId orderId;
     Quantity sharesTraded;
     MatchId matchId;
-    char printable;
+    Printable printable;
     Price priceTradedAt;
 
-    OrderExecutedPrice(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Quantity q, MatchId m, char print, Price p)
+    OrderExecutedPrice(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Quantity q, MatchId m, Printable print, Price p)
         : stockIndex(s)
         , trackNumber(t)
         , timestamp(time)
