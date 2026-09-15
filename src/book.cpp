@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 
 #include "../include/readers.h"
 #include "../include/messages.h"
@@ -25,6 +26,22 @@ class OrderBook {
     std::int32_t tickSize;
     std::uint32_t numLevels;
 
+    void reduceShares(Order& updatingOrder, Quantity sharesToReduce) {
+        Quantity remainingQuantity = updatingOrder.shares - sharesToReduce;
+
+        if (remainingQuantity < 0) {  // invalid reduction
+            std::cerr << "Data is invalid as the shares remaining is negative.\n";
+            return;
+        }
+        else if (remainingQuantity == 0) {  // no shares remain
+            deleteOrder(updatingOrder.id);
+            return;
+        }
+        else {
+            updatingOrder.shares = remainingQuantity;  // perform share reduction
+        }
+    }
+
 public:
     OrderBook(const StockStats& stockInfo, std::int32_t tickSize = 1)
         : minPrice(stockInfo.minPrice)
@@ -36,6 +53,24 @@ public:
         bidLadder.resize(numLevels, PriceLevelInfo{ UINT32_MAX, UINT32_MAX });
         askLadder.resize(numLevels, PriceLevelInfo{ UINT32_MAX, UINT32_MAX });
         chainPool.reserve(stockInfo.orderCount);
+    }
+
+    std::optional<Price> getBestBid() {  // highest price willing to buy at
+        for (std::uint32_t i = bidLadder.size(); i > 0; i--) {
+            if (bidLadder[i - 1].head != UINT32_MAX) {  // first populated order
+                return chainPool[bidLadder[i - 1].head].price;
+            }
+        }
+        return std::nullopt;
+    }
+
+    std::optional<Price> getBestAsk() {  // lowest price willing to sell at
+        for (std::uint32_t i = 0; i < askLadder.size(); i++) {
+            if (askLadder[i].head != UINT32_MAX) {  // first populated order
+                return chainPool[askLadder[i].head].price;
+            }
+        }
+        return std::nullopt;
     }
 
     void addOrder(OrderId id, Side side, Quantity shares, Price price) {
@@ -89,21 +124,7 @@ public:
             std::cerr << "Order does not exist in this book.\n";
             return;
         }
-
-        Order& orderToCancel = chainPool[it->second];
-        Quantity remainingQuantity = orderToCancel.shares - sharesToCancel;
-
-        if (remainingQuantity < 0) {  // invalid reduction
-            std::cerr << "Data is invalid as the shares remaining is negative.\n";
-            return;
-        }
-        else if (remainingQuantity == 0) {  // no shares remain
-            deleteOrder(id);
-            return;
-        }
-        else {
-            orderToCancel.shares = remainingQuantity;  // cancel share amount
-        }
+        reduceShares(chainPool[it->second], sharesToCancel);
     }
 
     void deleteOrder(OrderId id) {
@@ -141,8 +162,30 @@ public:
         freeSlots.push_back(it->second);  // free up slot
         orderMap.erase(id);  // delete
     }
-};
 
-int main() {
-    return 0;
-}
+    void replaceOrder(OrderId initialId, OrderId newId, Quantity newShares, Price newPrice) {
+        auto it = orderMap.find(initialId);
+        if (it == orderMap.end()) {  // order dne
+            std::cerr << "Order does not exist in this book.\n";
+            return;
+        }
+        if (orderMap.contains(newId)) {  // duplicate check
+            std::cerr << "Order ID already exists in this book.\n";
+            return;
+        }
+        Side initialSide = chainPool[it->second].side;
+
+        // delete old and add updated order
+        deleteOrder(initialId);
+        addOrder(newId, initialSide, newShares, newPrice);
+    }
+
+    void executedOrder(OrderId id, Quantity sharesToExecute) {
+        auto it = orderMap.find(id);
+        if (it == orderMap.end()) {  // order dne
+            std::cerr << "Order does not exist in this book.\n";
+            return;
+        }
+        reduceShares(chainPool[it->second], sharesToExecute);
+    }
+};
