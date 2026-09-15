@@ -21,17 +21,16 @@ class OrderBook {
     std::vector<PoolIndex> freeSlots;
     std::unordered_map<OrderId, PoolIndex> orderMap;
 
-    Price minPrice;
-    Price maxPrice;
+    Price minPrice, maxPrice;
     std::int32_t tickSize;
     std::uint32_t numLevels;
 
 public:
-    OrderBook(const StockStats& stockInfo, std::int32_t tickSize)
+    OrderBook(const StockStats& stockInfo, std::int32_t tickSize = 1)
         : minPrice(stockInfo.minPrice)
         , maxPrice(stockInfo.maxPrice)
         , tickSize(tickSize) {
-        numLevels = (stockInfo.maxPrice - stockInfo.minPrice) / tickSize;
+        numLevels = ((stockInfo.maxPrice - stockInfo.minPrice) / tickSize) + 1;
         numLevels = numLevels == 0 ? 1 : numLevels;
         // fill ladders with init indexes and set max size for pool
         bidLadder.resize(numLevels, PriceLevelInfo{ UINT32_MAX, UINT32_MAX });
@@ -105,6 +104,42 @@ public:
         else {
             orderToCancel.shares = remainingQuantity;  // cancel share amount
         }
+    }
+
+    void deleteOrder(OrderId id) {
+        auto it = orderMap.find(id);
+        if (it == orderMap.end()) {  // order dne
+            std::cerr << "Order does not exist in this book.\n";
+            return;
+        }
+
+        Order& orderToDelete = chainPool[it->second];
+        std::uint32_t priceLadderIndex = (orderToDelete.price - minPrice) / tickSize;
+        PriceLevelInfo& levelInfo = (orderToDelete.side == 'B') ? bidLadder[priceLadderIndex] : askLadder[priceLadderIndex];  // chain bound indexes
+
+        // find role of order in the chain
+        bool isHead = (levelInfo.head == it->second);
+        bool isTail = (levelInfo.tail == it->second);
+
+        // handle deletion cases with chain bounds
+        if (isHead && isTail) {  // only order
+            levelInfo.head = levelInfo.tail = UINT32_MAX;
+        }
+        else if (isHead && !isTail) {  // front of chain
+            levelInfo.head = chainPool[levelInfo.head].nextIndex;
+            chainPool[levelInfo.head].prevIndex = UINT32_MAX;
+        }
+        else if (!isHead && isTail) {  // back of chain
+            levelInfo.tail = chainPool[levelInfo.tail].prevIndex;
+            chainPool[levelInfo.tail].nextIndex = UINT32_MAX;
+        }
+        else {  // middle of chain (skip over)
+            chainPool[orderToDelete.prevIndex].nextIndex = orderToDelete.nextIndex;
+            chainPool[orderToDelete.nextIndex].prevIndex = orderToDelete.prevIndex;
+        }
+
+        freeSlots.push_back(it->second);  // free up slot
+        orderMap.erase(id);  // delete
     }
 };
 
