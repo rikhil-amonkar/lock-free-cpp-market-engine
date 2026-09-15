@@ -191,6 +191,46 @@ public:
         }
         reduceShares(chainPool[it->second], sharesToExecute);
     }
+
+    void printAllOrders() {
+        std::cout << "BID LADDER\n";
+        for (std::uint32_t i = bidLadder.size(); i > 0; i--) {  // bids
+            Price priceAtLevel = ((i - 1) * tickSize) + minPrice;  // get orig price
+            PoolIndex current = bidLadder[i - 1].head;
+            if (current == UINT32_MAX) {
+                continue;
+            }
+
+            std::uint32_t totalOrders = 0;
+            Quantity totalShares = 0;
+            while (current != UINT32_MAX) {  // accumulate level info
+                totalOrders += 1;
+                totalShares += chainPool[current].shares;
+                current = chainPool[current].nextIndex;
+            }
+
+            std::cout << priceAtLevel << ": " << totalOrders << " order(s), " << totalShares << " share(s)\n";
+        }
+
+        std::cout << "ASK LADDER\n";
+        for (std::uint32_t i = 0; i < askLadder.size(); i++) {  // asks
+            Price priceAtLevel = (i * tickSize) + minPrice;  // get orig price
+            PoolIndex current = askLadder[i].head;
+            if (current == UINT32_MAX) {
+                continue;
+            }
+
+            std::uint32_t totalOrders = 0;
+            Quantity totalShares = 0;
+            while (current != UINT32_MAX) {  // accumulate level info
+                totalOrders += 1;
+                totalShares += chainPool[current].shares;
+                current = chainPool[current].nextIndex;
+            }
+
+            std::cout << priceAtLevel << ": " << totalOrders << " order(s), " << totalShares << " share(s)\n";
+        }
+    }
 };
 
 #endif
