@@ -41,6 +41,7 @@ public:
 
     void addOrder(OrderId id, Side side, Quantity shares, Price price) {
         if (orderMap.contains(id)) {  // duplicate check
+            std::cerr << "Order ID already exists in this book.\n";
             return;
         }
 
@@ -81,6 +82,29 @@ public:
         levelInfo.tail = emptyPoolIndex;  // new order is always the new tail
 
         orderMap[id] = emptyPoolIndex;
+    }
+
+    void cancelOrder(OrderId id, Quantity sharesToCancel) {
+        auto it = orderMap.find(id);
+        if (it == orderMap.end()) {  // order dne
+            std::cerr << "Order does not exist in this book.\n";
+            return;
+        }
+
+        Order& orderToCancel = chainPool[it->second];
+        Quantity remainingQuantity = orderToCancel.shares - sharesToCancel;
+
+        if (remainingQuantity < 0) {  // invalid reduction
+            std::cerr << "Data is invalid as the shares remaining is negative.\n";
+            return;
+        }
+        else if (remainingQuantity == 0) {  // no shares remain
+            deleteOrder(id);
+            return;
+        }
+        else {
+            orderToCancel.shares = remainingQuantity;  // cancel share amount
+        }
     }
 };
 
