@@ -13,37 +13,9 @@
 #include "../include/readers.h"
 #include "../include/messages.h"
 #include "../include/orders.h"
-
-using StockIndex = std::uint16_t;
-using TrackNumber = std::uint16_t;
-using Timestamp = std::uint64_t;
-using OrderId = std::uint64_t;
-using MatchId = std::uint64_t;
-using Quantity = std::int32_t;
-using Price = std::int32_t;
-using ticker = std::string;
-using MPID = std::string;
-using Side = char;
-using EventCode = char;
-using Printable = char;
+#include "../include/aliases.h"
 
 class DataParser {
-
-    // storage vectors for messages
-    std::vector<SystemEvent> systemEvents;
-    std::vector<AddOrder> addOrders;
-    std::vector<AddOrderMPID> addOrdersMPID;
-    std::vector<OrderExecuted> executeOrders;
-    std::vector<OrderExecutedPrice> executeOrdersPrice;
-    std::vector<OrderCancel> cancelOrders;
-    std::vector<OrderDelete> deleteOrders;
-    std::vector<OrderReplace> replaceOrders;
-
-    // store all messages (to maintain order across types)
-    std::vector<BaseMessage> allMessages;
-
-    // map stocks to running price bounds and order counts
-    std::unordered_map<StockIndex, StockStats> stockInfo;
 
 private:
     void processDataStream(const std::string filename) {
@@ -112,8 +84,8 @@ private:
                 }
                 else {  // min-max update and increment
                     it->second.minPrice = std::min(price, it->second.minPrice);
-                    it->second.maxPrice = std::min(price, it->second.maxPrice);
-                    it->second.orderCount += 1;
+                    it->second.maxPrice = std::max(price, it->second.maxPrice);
+                    it->second.orderCount++;
                 }
             }
             // add order with mpid
@@ -140,8 +112,8 @@ private:
                 }
                 else {  // min-max update and increment
                     it->second.minPrice = std::min(price, it->second.minPrice);
-                    it->second.maxPrice = std::min(price, it->second.maxPrice);
-                    it->second.orderCount += 1;
+                    it->second.maxPrice = std::max(price, it->second.maxPrice);
+                    it->second.orderCount++;
                 }
             }
             // execute order
@@ -153,8 +125,8 @@ private:
                 Quantity sharesTraded = read_32_bit_int_be(buffer, offset);
                 MatchId matchId = read_64_bit_int_be(buffer, offset);
 
-                OrderExecuted executedOrderMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId);
-                executeOrders.push_back(executedOrderMessage);
+                OrderExecuted executeOrderMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId);
+                executeOrders.push_back(executeOrderMessage);
 
                 allMessages.push_back(BaseMessage{ "OrderExecuted", executeOrders.size() - 1 });
             }
@@ -169,8 +141,8 @@ private:
                 Printable printable = read_8_bit_int_be(buffer, offset);
                 Price priceTradedAt = read_32_bit_int_be(buffer, offset);
 
-                OrderExecutedPrice executedOrderPriceMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId, printable, priceTradedAt);
-                executeOrdersPrice.push_back(executedOrderPriceMessage);
+                OrderExecutedPrice executeOrderPriceMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId, printable, priceTradedAt);
+                executeOrdersPrice.push_back(executeOrderPriceMessage);
 
                 allMessages.push_back(BaseMessage{ "OrderExecutedPrice", executeOrdersPrice.size() - 1 });
             }
@@ -213,6 +185,13 @@ private:
                 replaceOrders.push_back(replaceOrderMessage);
 
                 allMessages.push_back(BaseMessage{ "OrderReplace", replaceOrders.size() - 1 });
+
+                // update min/max (due to new price info)
+                auto it = stockInfo.find(stockIndex);
+                if (it != stockInfo.end()) {
+                    it->second.minPrice = std::min(it->second.minPrice, newPrice);
+                    it->second.maxPrice = std::max(it->second.maxPrice, newPrice);
+                }
             }
 
             // update read pos
@@ -225,11 +204,50 @@ private:
 public:
     const std::string filename;
 
-    DataParser(const std::string f) : filename(f) {};
+    // storage vectors for messages
+    std::vector<SystemEvent>& systemEvents;
+    std::vector<AddOrder>& addOrders;
+    std::vector<AddOrderMPID>& addOrdersMPID;
+    std::vector<OrderExecuted>& executeOrders;
+    std::vector<OrderExecutedPrice>& executeOrdersPrice;
+    std::vector<OrderCancel>& cancelOrders;
+    std::vector<OrderDelete>& deleteOrders;
+    std::vector<OrderReplace>& replaceOrders;
 
-    std::pair<std::vector<BaseMessage>, std::unordered_map<StockIndex, StockStats>> getMessageAndStockData() {
+    // store all messages (to maintain order across types)
+    std::vector<BaseMessage>& allMessages;
+
+    // map stocks to running price bounds and order counts
+    std::unordered_map<StockIndex, StockStats>& stockInfo;
+
+    DataParser(
+        const std::string f,
+        std::vector<SystemEvent>& systemEvents,
+        std::vector<AddOrder>& addOrders,
+        std::vector<AddOrderMPID>& addOrdersMPID,
+        std::vector<OrderExecuted>& executeOrders,
+        std::vector<OrderExecutedPrice>& executeOrdersPrice,
+        std::vector<OrderCancel>& cancelOrders,
+        std::vector<OrderDelete>& deleteOrders,
+        std::vector<OrderReplace>& replaceOrders,
+        std::vector<BaseMessage>& allMessages,
+        std::unordered_map<StockIndex, StockStats>& stockInfo
+    )
+        : filename(f)
+        , systemEvents(systemEvents)
+        , addOrders(addOrders)
+        , addOrdersMPID(addOrdersMPID)
+        , executeOrders(executeOrders)
+        , executeOrdersPrice(executeOrdersPrice)
+        , cancelOrders(cancelOrders)
+        , deleteOrders(deleteOrders)
+        , replaceOrders(replaceOrders)
+        , allMessages(allMessages)
+        , stockInfo(stockInfo) {
+    };
+
+    void getMessageAndStockData() {
         processDataStream(filename);
-        return { allMessages, stockInfo };
     }
 
 };

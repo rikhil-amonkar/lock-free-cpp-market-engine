@@ -4,18 +4,7 @@
 #include <string>
 #include <cstdint>
 
-using StockIndex = std::uint16_t;
-using TrackNumber = std::uint16_t;
-using Timestamp = std::uint64_t;
-using OrderId = std::uint64_t;
-using MatchId = std::uint64_t;
-using Quantity = std::int32_t;
-using Price = std::int32_t;
-using Ticker = std::string;
-using MPID = std::string;
-using Side = char;
-using EventCode = char;
-using Printable = char;
+#include "../include/aliases.h"
 
 struct BaseMessage {
     std::string type;

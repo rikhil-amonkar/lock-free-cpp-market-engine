@@ -47,7 +47,7 @@ std::uint16_t read_16_bit_int_be(std::vector<char>& buffer, std::uint32_t& offse
 
 std::int8_t read_8_bit_int_be(std::vector<char>& buffer, std::uint32_t& offset) {
     std::int8_t value = static_cast<unsigned char>(buffer[offset]);
-    offset += 1;
+    offset++;
 
     return value;
 }

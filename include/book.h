@@ -11,12 +11,7 @@
 #include "../include/readers.h"
 #include "../include/messages.h"
 #include "../include/orders.h"
-
-using OrderId = std::uint64_t;
-using Side = char;
-using Quantity = std::int32_t;
-using Price = std::int32_t;
-using PoolIndex = std::uint32_t;
+#include "../include/aliases.h"
 
 class OrderBook {
     std::vector<Order> chainPool;
@@ -30,18 +25,16 @@ class OrderBook {
     std::uint32_t numLevels;
 
     void reduceShares(Order& updatingOrder, Quantity sharesToReduce) {
-        Quantity remainingQuantity = updatingOrder.shares - sharesToReduce;
-
-        if (remainingQuantity < 0) {  // invalid reduction
+        if (sharesToReduce > updatingOrder.shares) {  // invalid reduction
             std::cerr << "Data is invalid as the shares remaining is negative.\n";
             return;
         }
-        else if (remainingQuantity == 0) {  // no shares remain
+        else if (sharesToReduce == updatingOrder.shares) {  // no shares remain
             deleteOrder(updatingOrder.id);
             return;
         }
         else {
-            updatingOrder.shares = remainingQuantity;  // perform share reduction
+            updatingOrder.shares -= sharesToReduce;  // perform share reduction
         }
     }
 
@@ -124,7 +117,7 @@ public:
     void cancelOrder(OrderId id, Quantity sharesToCancel) {
         auto it = orderMap.find(id);
         if (it == orderMap.end()) {  // order dne
-            std::cerr << "Order does not exist in this book.\n";
+            std::cerr << "CANCEL: Order does not exist in this book.\n";
             return;
         }
         reduceShares(chainPool[it->second], sharesToCancel);
@@ -133,7 +126,7 @@ public:
     void deleteOrder(OrderId id) {
         auto it = orderMap.find(id);
         if (it == orderMap.end()) {  // order dne
-            std::cerr << "Order does not exist in this book.\n";
+            std::cerr << "DELETE: Order does not exist in this book.\n";
             return;
         }
 
@@ -169,7 +162,7 @@ public:
     void replaceOrder(OrderId initialId, OrderId newId, Quantity newShares, Price newPrice) {
         auto it = orderMap.find(initialId);
         if (it == orderMap.end()) {  // order dne
-            std::cerr << "Order does not exist in this book.\n";
+            std::cerr << "REPLACE: Order does not exist in this book.\n";
             return;
         }
         if (orderMap.contains(newId)) {  // duplicate check
@@ -183,16 +176,17 @@ public:
         addOrder(newId, initialSide, newShares, newPrice);
     }
 
-    void executedOrder(OrderId id, Quantity sharesToExecute) {
+    void executeOrder(OrderId id, Quantity sharesToExecute) {
         auto it = orderMap.find(id);
         if (it == orderMap.end()) {  // order dne
-            std::cerr << "Order does not exist in this book.\n";
+            std::cerr << "EXECUTE: Order does not exist in this book.\n";
             return;
         }
         reduceShares(chainPool[it->second], sharesToExecute);
     }
 
     void printAllOrders() {
+        std::cout << "=========================\n";
         std::cout << "BID LADDER\n";
         for (std::uint32_t i = bidLadder.size(); i > 0; i--) {  // bids
             Price priceAtLevel = ((i - 1) * tickSize) + minPrice;  // get orig price
@@ -204,7 +198,7 @@ public:
             std::uint32_t totalOrders = 0;
             Quantity totalShares = 0;
             while (current != UINT32_MAX) {  // accumulate level info
-                totalOrders += 1;
+                totalOrders++;
                 totalShares += chainPool[current].shares;
                 current = chainPool[current].nextIndex;
             }
@@ -212,7 +206,7 @@ public:
             std::cout << priceAtLevel << ": " << totalOrders << " order(s), " << totalShares << " share(s)\n";
         }
 
-        std::cout << "ASK LADDER\n";
+        std::cout << "\nASK LADDER\n";
         for (std::uint32_t i = 0; i < askLadder.size(); i++) {  // asks
             Price priceAtLevel = (i * tickSize) + minPrice;  // get orig price
             PoolIndex current = askLadder[i].head;
@@ -223,13 +217,14 @@ public:
             std::uint32_t totalOrders = 0;
             Quantity totalShares = 0;
             while (current != UINT32_MAX) {  // accumulate level info
-                totalOrders += 1;
+                totalOrders++;
                 totalShares += chainPool[current].shares;
                 current = chainPool[current].nextIndex;
             }
 
             std::cout << priceAtLevel << ": " << totalOrders << " order(s), " << totalShares << " share(s)\n";
         }
+        std::cout << "=========================\n";
     }
 };
 

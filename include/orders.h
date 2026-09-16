@@ -3,11 +3,7 @@
 
 #include <cstdint>
 
-using OrderId = std::uint64_t;
-using Quantity = std::int32_t;
-using Price = std::int32_t;
-using PoolIndex = std::uint32_t;
-using Side = char;
+#include "../include/aliases.h"
 
 struct Order {
     OrderId id;
