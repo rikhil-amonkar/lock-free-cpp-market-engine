@@ -4,7 +4,7 @@
 #include <string>
 #include <cstdint>
 
-#include "../include/aliases.h"
+#include "aliases.h"
 
 struct BaseMessage {
     std::string type;

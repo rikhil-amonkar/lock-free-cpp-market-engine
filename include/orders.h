@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-#include "../include/aliases.h"
+#include "aliases.h"
 
 struct Order {
     OrderId id;

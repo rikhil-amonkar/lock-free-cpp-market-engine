@@ -5,33 +5,21 @@
 #include <string>
 #include <algorithm>
 #include <cstdint>
+#include <utility>
 
-#include "../include/readers.h"
-#include "../include/messages.h"
-#include "../include/orders.h"
+#include "readers.h"
+#include "messages.h"
+#include "orders.h"
+#include "aliases.h"
+#include "parser.h"
 
-using StockIndex = std::uint16_t;
-using TrackNumber = std::uint16_t;
-using Timestamp = std::uint64_t;
-using OrderId = std::uint64_t;
-using MatchId = std::uint64_t;
-using Quantity = std::int32_t;
-using Price = std::int32_t;
-using ticker = std::string;
-using MPID = std::string;
-using Side = char;
-using EventCode = char;
-using Printable = char;
-
-int main() {
-
-    const std::string FILENAME = "./sample.bin";
+void DataParser::processDataStream(const std::string filename) {
 
     // for bin file + move ptr to end
-    std::ifstream file(FILENAME, std::ios::binary | std::ios::ate);
+    std::ifstream file(filename, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         std::cerr << "Failed to open file.\n";
-        return 1;
+        return;
     }
 
     std::streamsize fileSize = file.tellg();  // get size of file
@@ -44,22 +32,6 @@ int main() {
 
     std::int32_t remainingBytes = buffer.size();
     std::uint32_t offset = 0;
-
-    // storage vectors for messages
-    std::vector<SystemEvent> systemEvents;
-    std::vector<AddOrder> addOrders;
-    std::vector<AddOrderMPID> addOrdersMPID;
-    std::vector<OrderExecuted> executeOrders;
-    std::vector<OrderExecutedPrice> executeOrdersPrice;
-    std::vector<OrderCancel> cancelOrders;
-    std::vector<OrderDelete> deleteOrders;
-    std::vector<OrderReplace> replaceOrders;
-
-    // store all messages (to maintain order across types)
-    std::vector<BaseMessage> allMessages;
-
-    // map stocks to running price bounds and order counts
-    std::unordered_map<StockIndex, StockStats> stockInfo;
 
     while (remainingBytes > 1) {
         std::uint16_t lengthPrefix = read_16_bit_int_be(buffer, offset);
@@ -107,8 +79,8 @@ int main() {
             }
             else {  // min-max update and increment
                 it->second.minPrice = std::min(price, it->second.minPrice);
-                it->second.maxPrice = std::min(price, it->second.maxPrice);
-                it->second.orderCount += 1;
+                it->second.maxPrice = std::max(price, it->second.maxPrice);
+                it->second.orderCount++;
             }
         }
         // add order with mpid
@@ -135,8 +107,8 @@ int main() {
             }
             else {  // min-max update and increment
                 it->second.minPrice = std::min(price, it->second.minPrice);
-                it->second.maxPrice = std::min(price, it->second.maxPrice);
-                it->second.orderCount += 1;
+                it->second.maxPrice = std::max(price, it->second.maxPrice);
+                it->second.orderCount++;
             }
         }
         // execute order
@@ -148,8 +120,8 @@ int main() {
             Quantity sharesTraded = read_32_bit_int_be(buffer, offset);
             MatchId matchId = read_64_bit_int_be(buffer, offset);
 
-            OrderExecuted executedOrderMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId);
-            executeOrders.push_back(executedOrderMessage);
+            OrderExecuted executeOrderMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId);
+            executeOrders.push_back(executeOrderMessage);
 
             allMessages.push_back(BaseMessage{ "OrderExecuted", executeOrders.size() - 1 });
         }
@@ -164,8 +136,8 @@ int main() {
             Printable printable = read_8_bit_int_be(buffer, offset);
             Price priceTradedAt = read_32_bit_int_be(buffer, offset);
 
-            OrderExecutedPrice executedOrderPriceMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId, printable, priceTradedAt);
-            executeOrdersPrice.push_back(executedOrderPriceMessage);
+            OrderExecutedPrice executeOrderPriceMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId, printable, priceTradedAt);
+            executeOrdersPrice.push_back(executeOrderPriceMessage);
 
             allMessages.push_back(BaseMessage{ "OrderExecutedPrice", executeOrdersPrice.size() - 1 });
         }
@@ -208,6 +180,13 @@ int main() {
             replaceOrders.push_back(replaceOrderMessage);
 
             allMessages.push_back(BaseMessage{ "OrderReplace", replaceOrders.size() - 1 });
+
+            // update min/max (due to new price info)
+            auto it = stockInfo.find(stockIndex);
+            if (it != stockInfo.end()) {
+                it->second.minPrice = std::min(it->second.minPrice, newPrice);
+                it->second.maxPrice = std::max(it->second.maxPrice, newPrice);
+            }
         }
 
         // update read pos
@@ -215,5 +194,34 @@ int main() {
         remainingBytes = fileSize - offset;
     }
 
-    return 0;
+}
+
+DataParser::DataParser(
+    const std::string f,
+    std::vector<SystemEvent>& systemEvents,
+    std::vector<AddOrder>& addOrders,
+    std::vector<AddOrderMPID>& addOrdersMPID,
+    std::vector<OrderExecuted>& executeOrders,
+    std::vector<OrderExecutedPrice>& executeOrdersPrice,
+    std::vector<OrderCancel>& cancelOrders,
+    std::vector<OrderDelete>& deleteOrders,
+    std::vector<OrderReplace>& replaceOrders,
+    std::vector<BaseMessage>& allMessages,
+    std::unordered_map<StockIndex, StockStats>& stockInfo
+)
+    : filename(f)
+    , systemEvents(systemEvents)
+    , addOrders(addOrders)
+    , addOrdersMPID(addOrdersMPID)
+    , executeOrders(executeOrders)
+    , executeOrdersPrice(executeOrdersPrice)
+    , cancelOrders(cancelOrders)
+    , deleteOrders(deleteOrders)
+    , replaceOrders(replaceOrders)
+    , allMessages(allMessages)
+    , stockInfo(stockInfo) {
+};
+
+void DataParser::getMessageAndStockData() {
+    processDataStream(filename);
 }
