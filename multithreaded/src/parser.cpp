@@ -35,7 +35,7 @@ void DataParser::processDataStream(const std::string filename) {
     std::uint32_t offset = 0;
 
     while (remainingBytes > 1) {
-        std::uint16_t lengthPrefix = read_16_bit_int_be(buffer, offset);
+        std::uint16_t lengthPrefix = read_16_bit_int_be(buffer, offset);  // size of message
         if (offset + lengthPrefix > fileSize) {  // invalid indexing check
             std::cerr << "Byte index is out of range.\n";
             break;
@@ -147,9 +147,13 @@ void DataParser::processDataStream(const std::string filename) {
             Price newPrice = read_32_bit_int_be(buffer, offset);
 
             messages.push_back(ReplaceOrder{ index, oid, nid, newShares, newPrice });
-        }
-        else {
-            continue;  // skip other message types
+
+            // update min/max (due to new price info)
+            auto it = stockInfo.find(index);
+            if (it != stockInfo.end()) {
+                it->second.minPrice = std::min(it->second.minPrice, newPrice);
+                it->second.maxPrice = std::max(it->second.maxPrice, newPrice);
+            }
         }
 
         // update read pos
