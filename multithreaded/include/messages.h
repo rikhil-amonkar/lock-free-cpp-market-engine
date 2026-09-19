@@ -6,156 +6,67 @@
 
 #include "aliases.h"
 
-struct BaseMessage {
-    std::string type;
-    std::uint64_t index;
-};
-
-struct SystemEvent {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    EventCode eventCode;
-
-    SystemEvent(StockIndex s, TrackNumber t, Timestamp time, EventCode e)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , eventCode(e) {
-    }
-};
-
 struct AddOrder {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    OrderId orderId;
+    StockIndex index;
+    OrderId id;
     Side side;
     Quantity shares;
-    Ticker ticker;
     Price price;
 
-    AddOrder(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Side side, Quantity q, Ticker tick, Price p)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , orderId(id)
-        , side(side)
+    AddOrder(StockIndex i, OrderId d, Side s, Quantity q, Price p)
+        : index(i)
+        , id(d)
+        , side(s)
         , shares(q)
-        , ticker(tick)
         , price(p) {
     }
 };
 
-struct AddOrderMPID {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    OrderId orderId;
-    Side side;
-    Quantity shares;
-    Ticker ticker;
-    Price price;
-    MPID mpid;
-
-    AddOrderMPID(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Side side, Quantity q, Ticker tick, Price p, MPID m)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , orderId(id)
-        , side(side)
-        , shares(q)
-        , ticker(tick)
-        , price(p)
-        , mpid(m) {
-    }
-};
-
-struct OrderExecuted {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    OrderId orderId;
+struct ExecuteOrder {
+    StockIndex index;
+    OrderId id;
     Quantity sharesTraded;
-    MatchId matchId;
 
-    OrderExecuted(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Quantity q, MatchId m)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , orderId(id)
-        , sharesTraded(q)
-        , matchId(m) {
+    ExecuteOrder(StockIndex i, OrderId d, Quantity q)
+        : index(i)
+        , id(d)
+        , sharesTraded(q) {
     }
 };
 
-struct OrderExecutedPrice {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    OrderId orderId;
-    Quantity sharesTraded;
-    MatchId matchId;
-    Printable printable;
-    Price priceTradedAt;
-
-    OrderExecutedPrice(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Quantity q, MatchId m, Printable print, Price p)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , orderId(id)
-        , sharesTraded(q)
-        , matchId(m)
-        , printable(print)
-        , priceTradedAt(p) {
-    }
-};
-
-struct OrderCancel {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    OrderId orderId;
+struct CancelOrder {
+    StockIndex index;
+    OrderId id;
     Quantity canceledShares;
 
-    OrderCancel(StockIndex s, TrackNumber t, Timestamp time, OrderId id, Quantity q)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , orderId(id)
+    CancelOrder(StockIndex i, OrderId d, Quantity q)
+        : index(i)
+        , id(d)
         , canceledShares(q) {
     }
 };
 
-struct OrderDelete {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    OrderId orderId;
+struct DeleteOrder {
+    StockIndex index;
+    OrderId id;
 
-    OrderDelete(StockIndex s, TrackNumber t, Timestamp time, OrderId id)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , orderId(id) {
+    DeleteOrder(StockIndex i, OrderId d)
+        : index(i)
+        , id(d) {
     }
 };
 
-struct OrderReplace {
-    StockIndex stockIndex;
-    TrackNumber trackNumber;
-    Timestamp timestamp;
-    OrderId initOrderId;
-    OrderId newOrderId;
+struct ReplaceOrder {
+    StockIndex index;
+    OrderId oid;
+    OrderId nid;
     Quantity newShares;
     Price newPrice;
 
-    OrderReplace(StockIndex s, TrackNumber t, Timestamp time, OrderId oid, OrderId nid, Quantity q, Price p)
-        : stockIndex(s)
-        , trackNumber(t)
-        , timestamp(time)
-        , initOrderId(oid)
-        , newOrderId(nid)
+    ReplaceOrder(StockIndex i, OrderId o, OrderId n, Quantity q, Price p)
+        : index(i)
+        , oid(o)
+        , nid(n)
         , newShares(q)
         , newPrice(p) {
     }

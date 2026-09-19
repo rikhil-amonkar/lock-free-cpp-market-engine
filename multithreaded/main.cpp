@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdint>
 #include <chrono>
+#include <variant>
 
 #include "parser.h"
 #include "book.h"
@@ -17,27 +18,13 @@ int main() {
 	// const std::string filename = "../data/full_mb_sample.bin";
 	std::unordered_map<StockIndex, OrderBook> globalOrderBook;  // book per stock
 
-	// storage vectors for messages
-	std::vector<SystemEvent> systemEvents;
-	std::vector<AddOrder> addOrders;
-	std::vector<AddOrderMPID> addOrdersMPID;
-	std::vector<OrderExecuted> executeOrders;
-	std::vector<OrderExecutedPrice> executeOrdersPrice;
-	std::vector<OrderCancel> cancelOrders;
-	std::vector<OrderDelete> deleteOrders;
-	std::vector<OrderReplace> replaceOrders;
-
 	// store all messages (to maintain order across types)
-	std::vector<BaseMessage> allMessages;
+	std::vector<std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>> messages;
 
 	// map stocks to running price bounds and order counts
 	std::unordered_map<StockIndex, StockStats> stockInfo;
 
-	DataParser parser(
-		filename, systemEvents, addOrders, addOrdersMPID,
-		executeOrders, executeOrdersPrice, cancelOrders,
-		deleteOrders, replaceOrders, allMessages, stockInfo
-	);
+	DataParser parser(filename, messages, stockInfo);
 
 	auto start_parse_data = std::chrono::steady_clock::now();
 	parser.getMessageAndStockData();  // parse itch messages
@@ -52,51 +39,38 @@ int main() {
 
 	// handle book operations from orders
 	auto start_fill_books = std::chrono::steady_clock::now();
-	for (const auto& [messageType, typeIndex] : allMessages) {
-		if (messageType == "AddOrder") {
-			AddOrder action = addOrders[typeIndex];
-			OrderBook& book = globalOrderBook.at(action.stockIndex);
-			book.addOrder(action.orderId, action.side, action.shares, action.price);
-		}
-		else if (messageType == "AddOrderMPID") {
-			AddOrderMPID action = addOrdersMPID[typeIndex];
-			OrderBook& book = globalOrderBook.at(action.stockIndex);
-			book.addOrder(action.orderId, action.side, action.shares, action.price);
-		}
-		else if (messageType == "OrderExecuted") {
-			OrderExecuted action = executeOrders[typeIndex];
-			OrderBook& book = globalOrderBook.at(action.stockIndex);
-			book.executeOrder(action.orderId, action.sharesTraded);
-		}
-		else if (messageType == "OrderExecutedPrice") {
-			OrderExecutedPrice action = executeOrdersPrice[typeIndex];
-			OrderBook& book = globalOrderBook.at(action.stockIndex);
-			book.executeOrder(action.orderId, action.sharesTraded);
-		}
-		else if (messageType == "OrderCancel") {
-			OrderCancel action = cancelOrders[typeIndex];
-			OrderBook& book = globalOrderBook.at(action.stockIndex);
-			book.cancelOrder(action.orderId, action.canceledShares);
-		}
-		else if (messageType == "OrderDelete") {
-			OrderDelete action = deleteOrders[typeIndex];
-			OrderBook& book = globalOrderBook.at(action.stockIndex);
-			book.deleteOrder(action.orderId);
-		}
-		else if (messageType == "OrderReplace") {
-			OrderReplace action = replaceOrders[typeIndex];
-			OrderBook& book = globalOrderBook.at(action.stockIndex);
-			book.replaceOrder(action.initOrderId, action.newOrderId, action.newShares, action.newPrice);
-		}
-		else {
-			continue;  // skip system events
-		}
+	for (const auto& action : messages) {
+
+		// pass type from variant container
+		std::visit(
+			[&](const auto& order) {
+				using T = std::decay_t<decltype(order)>;  // get type from decayed ref
+
+				// handle global book with type checks (and disregard other branches)
+				if constexpr (std::is_same_v<T, AddOrder>) {
+					OrderBook& book = globalOrderBook.at(order.index);
+					book.addOrder(order.id, order.side, order.shares, order.price);
+				}
+				else if constexpr (std::is_same_v<T, ExecuteOrder>) {
+					OrderBook& book = globalOrderBook.at(order.index);
+					book.executeOrder(order.id, order.sharesTraded);
+				}
+				else if constexpr (std::is_same_v<T, CancelOrder>) {
+					OrderBook& book = globalOrderBook.at(order.index);
+					book.cancelOrder(order.id, order.canceledShares);
+				}
+				else if constexpr (std::is_same_v<T, DeleteOrder>) {
+					OrderBook& book = globalOrderBook.at(order.index);
+					book.deleteOrder(order.id);
+				}
+				else if constexpr (std::is_same_v<T, ReplaceOrder>) {
+					OrderBook& book = globalOrderBook.at(order.index);
+					book.replaceOrder(order.oid, order.nid, order.newShares, order.newPrice);
+				}
+			},
+			action);  // apply to iteration
 	}
 	auto end_fill_books = std::chrono::steady_clock::now();
-
-	// for (auto& [index, book] : globalOrderBook) {
-	// 	book.printAllOrders();
-	// }
 
 	// record runtimes for each part
 	auto parse_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_parse_data - start_parse_data);

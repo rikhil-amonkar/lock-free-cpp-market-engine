@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <utility>
+#include <variant>
 
 #include "readers.h"
 #include "messages.h"
@@ -43,39 +44,23 @@ void DataParser::processDataStream(const std::string filename) {
         std::int32_t messageStart = offset;  // mark orig pos
         char messageType = read_8_bit_int_be(buffer, offset);
 
-        // system event
-        if (messageType == 'S') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
-            TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
-            Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            EventCode eventCode = read_8_bit_int_be(buffer, offset);
-
-            SystemEvent systemEventMessage(stockIndex, trackNumber, timestamp, eventCode);
-            systemEvents.push_back(systemEventMessage);
-
-            BaseMessage baseMessage{ "SystemEvent", systemEvents.size() - 1 };
-            allMessages.push_back(baseMessage);
-        }
         // add order
-        else if (messageType == 'A') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
+        if (messageType == 'A') {
+            StockIndex index = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            OrderId orderId = read_64_bit_int_be(buffer, offset);
+            OrderId id = read_64_bit_int_be(buffer, offset);
             Side side = read_8_bit_int_be(buffer, offset);
             Quantity shares = read_32_bit_int_be(buffer, offset);
             Ticker ticker = read_ascii_field(buffer, offset, 8);
             Price price = read_32_bit_int_be(buffer, offset);
 
-            AddOrder addOrderMessage(stockIndex, trackNumber, timestamp, orderId, side, shares, ticker, price);
-            addOrders.push_back(addOrderMessage);
-
-            allMessages.push_back(BaseMessage{ "AddOrder", addOrders.size() - 1 });
+            messages.push_back(AddOrder{ index, id, side, shares, price });
 
             // add or update stock specific info for map
-            auto it = stockInfo.find(stockIndex);
+            auto it = stockInfo.find(index);
             if (it == stockInfo.end()) {
-                stockInfo.insert({ stockIndex, StockStats{ price, price, 1 } });
+                stockInfo.insert({ index, StockStats{ price, price, 1 } });
             }
             else {  // min-max update and increment
                 it->second.minPrice = std::min(price, it->second.minPrice);
@@ -85,25 +70,22 @@ void DataParser::processDataStream(const std::string filename) {
         }
         // add order with mpid
         else if (messageType == 'F') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
+            StockIndex index = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            OrderId orderId = read_64_bit_int_be(buffer, offset);
+            OrderId id = read_64_bit_int_be(buffer, offset);
             Side side = read_8_bit_int_be(buffer, offset);
             Quantity shares = read_32_bit_int_be(buffer, offset);
             Ticker ticker = read_ascii_field(buffer, offset, 8);
             Price price = read_32_bit_int_be(buffer, offset);
             MPID mpid = read_ascii_field(buffer, offset, 4);
 
-            AddOrderMPID addOrderMPIDMessage(stockIndex, trackNumber, timestamp, orderId, side, shares, ticker, price, mpid);
-            addOrdersMPID.push_back(addOrderMPIDMessage);
-
-            allMessages.push_back(BaseMessage{ "AddOrderMPID", addOrdersMPID.size() - 1 });
+            messages.push_back(AddOrder{ index, id, side, shares, price });
 
             // add or update stock specific info for map
-            auto it = stockInfo.find(stockIndex);
+            auto it = stockInfo.find(index);
             if (it == stockInfo.end()) {
-                stockInfo.insert({ stockIndex, StockStats{ price, price, 1 } });
+                stockInfo.insert({ index, StockStats{ price, price, 1 } });
             }
             else {  // min-max update and increment
                 it->second.minPrice = std::min(price, it->second.minPrice);
@@ -113,113 +95,77 @@ void DataParser::processDataStream(const std::string filename) {
         }
         // execute order
         else if (messageType == 'E') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
+            StockIndex index = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            OrderId orderId = read_64_bit_int_be(buffer, offset);
+            OrderId id = read_64_bit_int_be(buffer, offset);
             Quantity sharesTraded = read_32_bit_int_be(buffer, offset);
             MatchId matchId = read_64_bit_int_be(buffer, offset);
 
-            OrderExecuted executeOrderMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId);
-            executeOrders.push_back(executeOrderMessage);
-
-            allMessages.push_back(BaseMessage{ "OrderExecuted", executeOrders.size() - 1 });
+            messages.push_back(ExecuteOrder{ index, id, sharesTraded });
         }
         // execute order with price
         else if (messageType == 'C') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
+            StockIndex index = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            OrderId orderId = read_64_bit_int_be(buffer, offset);
+            OrderId id = read_64_bit_int_be(buffer, offset);
             Quantity sharesTraded = read_32_bit_int_be(buffer, offset);
             MatchId matchId = read_64_bit_int_be(buffer, offset);
             Printable printable = read_8_bit_int_be(buffer, offset);
             Price priceTradedAt = read_32_bit_int_be(buffer, offset);
 
-            OrderExecutedPrice executeOrderPriceMessage(stockIndex, trackNumber, timestamp, orderId, sharesTraded, matchId, printable, priceTradedAt);
-            executeOrdersPrice.push_back(executeOrderPriceMessage);
-
-            allMessages.push_back(BaseMessage{ "OrderExecutedPrice", executeOrdersPrice.size() - 1 });
+            messages.push_back(ExecuteOrder{ index, id, sharesTraded });
         }
         // cancel order
         else if (messageType == 'X') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
+            StockIndex index = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            OrderId orderId = read_64_bit_int_be(buffer, offset);
-            Quantity canceledShares = read_32_bit_int_be(buffer, offset);
+            OrderId id = read_64_bit_int_be(buffer, offset);
+            Quantity cancelledShares = read_32_bit_int_be(buffer, offset);
 
-            OrderCancel cancelOrderMessage(stockIndex, trackNumber, timestamp, orderId, canceledShares);
-            cancelOrders.push_back(cancelOrderMessage);
-
-            allMessages.push_back(BaseMessage{ "OrderCancel", cancelOrders.size() - 1 });
+            messages.push_back(CancelOrder{ index, id, cancelledShares });
         }
         // delete order
         else if (messageType == 'D') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
+            StockIndex index = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            OrderId orderId = read_64_bit_int_be(buffer, offset);
+            OrderId id = read_64_bit_int_be(buffer, offset);
 
-            OrderDelete deleteOrderMessage(stockIndex, trackNumber, timestamp, orderId);
-            deleteOrders.push_back(deleteOrderMessage);
-
-            allMessages.push_back(BaseMessage{ "OrderDelete", deleteOrders.size() - 1 });
+            messages.push_back(DeleteOrder{ index, id });
         }
         // replace order
         else if (messageType == 'U') {
-            StockIndex stockIndex = read_16_bit_int_be(buffer, offset);
+            StockIndex index = read_16_bit_int_be(buffer, offset);
             TrackNumber trackNumber = read_16_bit_int_be(buffer, offset);
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
-            OrderId initOrderId = read_64_bit_int_be(buffer, offset);
-            OrderId newOrderId = read_64_bit_int_be(buffer, offset);
+            OrderId oid = read_64_bit_int_be(buffer, offset);
+            OrderId nid = read_64_bit_int_be(buffer, offset);
             Quantity newShares = read_32_bit_int_be(buffer, offset);
             Price newPrice = read_32_bit_int_be(buffer, offset);
 
-            OrderReplace replaceOrderMessage(stockIndex, trackNumber, timestamp, initOrderId, newOrderId, newShares, newPrice);
-            replaceOrders.push_back(replaceOrderMessage);
-
-            allMessages.push_back(BaseMessage{ "OrderReplace", replaceOrders.size() - 1 });
-
-            // update min/max (due to new price info)
-            auto it = stockInfo.find(stockIndex);
-            if (it != stockInfo.end()) {
-                it->second.minPrice = std::min(it->second.minPrice, newPrice);
-                it->second.maxPrice = std::max(it->second.maxPrice, newPrice);
-            }
+            messages.push_back(ReplaceOrder{ index, oid, nid, newShares, newPrice });
+        }
+        else {
+            continue;  // skip other message types
         }
 
         // update read pos
         offset = messageStart + lengthPrefix;
         remainingBytes = fileSize - offset;
     }
-
 }
 
 DataParser::DataParser(
     const std::string f,
-    std::vector<SystemEvent>& systemEvents,
-    std::vector<AddOrder>& addOrders,
-    std::vector<AddOrderMPID>& addOrdersMPID,
-    std::vector<OrderExecuted>& executeOrders,
-    std::vector<OrderExecutedPrice>& executeOrdersPrice,
-    std::vector<OrderCancel>& cancelOrders,
-    std::vector<OrderDelete>& deleteOrders,
-    std::vector<OrderReplace>& replaceOrders,
-    std::vector<BaseMessage>& allMessages,
-    std::unordered_map<StockIndex, StockStats>& stockInfo
+    std::vector<std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>>& m,
+    std::unordered_map<StockIndex, StockStats>& s
 )
     : filename(f)
-    , systemEvents(systemEvents)
-    , addOrders(addOrders)
-    , addOrdersMPID(addOrdersMPID)
-    , executeOrders(executeOrders)
-    , executeOrdersPrice(executeOrdersPrice)
-    , cancelOrders(cancelOrders)
-    , deleteOrders(deleteOrders)
-    , replaceOrders(replaceOrders)
-    , allMessages(allMessages)
-    , stockInfo(stockInfo) {
+    , messages(m)
+    , stockInfo(s) {
 };
 
 void DataParser::getMessageAndStockData() {

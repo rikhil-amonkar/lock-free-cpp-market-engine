@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <utility>
+#include <variant>
 
 #include "readers.h"
 #include "messages.h"
@@ -21,34 +22,16 @@ class DataParser {
 public:
     const std::string filename;
 
-    // storage vectors for messages
-    std::vector<SystemEvent>& systemEvents;
-    std::vector<AddOrder>& addOrders;
-    std::vector<AddOrderMPID>& addOrdersMPID;
-    std::vector<OrderExecuted>& executeOrders;
-    std::vector<OrderExecutedPrice>& executeOrdersPrice;
-    std::vector<OrderCancel>& cancelOrders;
-    std::vector<OrderDelete>& deleteOrders;
-    std::vector<OrderReplace>& replaceOrders;
-
     // store all messages (to maintain order across types)
-    std::vector<BaseMessage>& allMessages;
+    std::vector < std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>>& messages;
 
     // map stocks to running price bounds and order counts
     std::unordered_map<StockIndex, StockStats>& stockInfo;
 
     DataParser(
         const std::string f,
-        std::vector<SystemEvent>& systemEvents,
-        std::vector<AddOrder>& addOrders,
-        std::vector<AddOrderMPID>& addOrdersMPID,
-        std::vector<OrderExecuted>& executeOrders,
-        std::vector<OrderExecutedPrice>& executeOrdersPrice,
-        std::vector<OrderCancel>& cancelOrders,
-        std::vector<OrderDelete>& deleteOrders,
-        std::vector<OrderReplace>& replaceOrders,
-        std::vector<BaseMessage>& allMessages,
-        std::unordered_map<StockIndex, StockStats>& stockInfo
+        std::vector < std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>>& m,
+        std::unordered_map<StockIndex, StockStats>& s
     );
 
     void getMessageAndStockData();
