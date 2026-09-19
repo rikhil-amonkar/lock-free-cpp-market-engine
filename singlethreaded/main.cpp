@@ -14,7 +14,7 @@
 int main() {
 
 	// const std::string filename = "./data/700_mb_sample.bin";
-	const std::string filename = "./data/full_mb_sample.bin";
+	const std::string filename = "../data/full_mb_sample.bin";
 	std::unordered_map<StockIndex, OrderBook> globalOrderBook;  // book per stock
 
 	// storage vectors for messages
