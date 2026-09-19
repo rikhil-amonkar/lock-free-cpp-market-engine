@@ -13,8 +13,8 @@
 
 int main() {
 
-	// const std::string filename = "./data/700_mb_sample.bin";
-	const std::string filename = "../data/full_mb_sample.bin";
+	const std::string filename = "../data/100_mb_sample.bin";
+	// const std::string filename = "../data/full_mb_sample.bin";
 	std::unordered_map<StockIndex, OrderBook> globalOrderBook;  // book per stock
 
 	// storage vectors for messages
@@ -94,9 +94,9 @@ int main() {
 	}
 	auto end_fill_books = std::chrono::steady_clock::now();
 
-	// for (auto& [index, book] : globalOrderBook) {
-	// 	book.printAllOrders();
-	// }
+	for (auto& [index, book] : globalOrderBook) {
+		book.printAllOrders();
+	}
 
 	// record runtimes for each part
 	auto parse_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_parse_data - start_parse_data);
