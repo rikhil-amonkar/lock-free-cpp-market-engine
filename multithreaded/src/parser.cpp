@@ -12,25 +12,12 @@
 #include "messages.h"
 #include "orders.h"
 #include "aliases.h"
+#include "queue.h"
 #include "parser.h"
 
-void DataParser::processDataStream(const std::string filename) {
+void DataParser::processDataStream() {
 
-    // for bin file + move ptr to end
-    std::ifstream file(filename, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open file.\n";
-        return;
-    }
-
-    std::streamsize fileSize = file.tellg();  // get size of file
-    file.seekg(0, std::ios::beg);  // move ptr to beg of file
-
-    std::vector<char> buffer(fileSize);  // allocate buffer
-    if (file.read(buffer.data(), fileSize)) {
-        std::cout << "Successfully read " << fileSize << " bytes of data into memory.\n";
-    }
-
+    std::uint32_t fileSize = buffer.size();
     std::int32_t remainingBytes = buffer.size();
     std::uint32_t offset = 0;
 
@@ -55,18 +42,7 @@ void DataParser::processDataStream(const std::string filename) {
             Ticker ticker = read_ascii_field(buffer, offset, 8);
             Price price = read_32_bit_int_be(buffer, offset);
 
-            messages.push_back(AddOrder{ index, id, side, shares, price });
-
-            // add or update stock specific info for map
-            auto it = stockInfo.find(index);
-            if (it == stockInfo.end()) {
-                stockInfo.insert({ index, StockStats{ price, price, 1 } });
-            }
-            else {  // min-max update and increment
-                it->second.minPrice = std::min(price, it->second.minPrice);
-                it->second.maxPrice = std::max(price, it->second.maxPrice);
-                it->second.orderCount++;
-            }
+            queue.push(AddOrder{ index, id, side, shares, price });
         }
         // add order with mpid
         else if (messageType == 'F') {
@@ -80,18 +56,7 @@ void DataParser::processDataStream(const std::string filename) {
             Price price = read_32_bit_int_be(buffer, offset);
             MPID mpid = read_ascii_field(buffer, offset, 4);
 
-            messages.push_back(AddOrder{ index, id, side, shares, price });
-
-            // add or update stock specific info for map
-            auto it = stockInfo.find(index);
-            if (it == stockInfo.end()) {
-                stockInfo.insert({ index, StockStats{ price, price, 1 } });
-            }
-            else {  // min-max update and increment
-                it->second.minPrice = std::min(price, it->second.minPrice);
-                it->second.maxPrice = std::max(price, it->second.maxPrice);
-                it->second.orderCount++;
-            }
+            queue.push(AddOrder{ index, id, side, shares, price });
         }
         // execute order
         else if (messageType == 'E') {
@@ -102,7 +67,7 @@ void DataParser::processDataStream(const std::string filename) {
             Quantity sharesTraded = read_32_bit_int_be(buffer, offset);
             MatchId matchId = read_64_bit_int_be(buffer, offset);
 
-            messages.push_back(ExecuteOrder{ index, id, sharesTraded });
+            queue.push(ExecuteOrder{ index, id, sharesTraded });
         }
         // execute order with price
         else if (messageType == 'C') {
@@ -115,7 +80,7 @@ void DataParser::processDataStream(const std::string filename) {
             Printable printable = read_8_bit_int_be(buffer, offset);
             Price priceTradedAt = read_32_bit_int_be(buffer, offset);
 
-            messages.push_back(ExecuteOrder{ index, id, sharesTraded });
+            queue.push(ExecuteOrder{ index, id, sharesTraded });
         }
         // cancel order
         else if (messageType == 'X') {
@@ -125,7 +90,7 @@ void DataParser::processDataStream(const std::string filename) {
             OrderId id = read_64_bit_int_be(buffer, offset);
             Quantity cancelledShares = read_32_bit_int_be(buffer, offset);
 
-            messages.push_back(CancelOrder{ index, id, cancelledShares });
+            queue.push(CancelOrder{ index, id, cancelledShares });
         }
         // delete order
         else if (messageType == 'D') {
@@ -134,7 +99,7 @@ void DataParser::processDataStream(const std::string filename) {
             Timestamp timestamp = read_48_bit_int_be(buffer, offset);
             OrderId id = read_64_bit_int_be(buffer, offset);
 
-            messages.push_back(DeleteOrder{ index, id });
+            queue.push(DeleteOrder{ index, id });
         }
         // replace order
         else if (messageType == 'U') {
@@ -146,14 +111,7 @@ void DataParser::processDataStream(const std::string filename) {
             Quantity newShares = read_32_bit_int_be(buffer, offset);
             Price newPrice = read_32_bit_int_be(buffer, offset);
 
-            messages.push_back(ReplaceOrder{ index, oid, nid, newShares, newPrice });
-
-            // update min/max (due to new price info)
-            auto it = stockInfo.find(index);
-            if (it != stockInfo.end()) {
-                it->second.minPrice = std::min(it->second.minPrice, newPrice);
-                it->second.maxPrice = std::max(it->second.maxPrice, newPrice);
-            }
+            queue.push(ReplaceOrder{ index, oid, nid, newShares, newPrice });
         }
 
         // update read pos
@@ -163,15 +121,9 @@ void DataParser::processDataStream(const std::string filename) {
 }
 
 DataParser::DataParser(
-    const std::string f,
-    std::vector<std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>>& m,
-    std::unordered_map<StockIndex, StockStats>& s
+    const std::vector<char>& b,
+    ThreadSafeSharedQueue& q
 )
-    : filename(f)
-    , messages(m)
-    , stockInfo(s) {
-};
-
-void DataParser::getMessageAndStockData() {
-    processDataStream(filename);
+    : buffer(b)
+    , queue(q) {
 }

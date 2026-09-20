@@ -3,7 +3,6 @@
 
 #include <iostream>
 #include <fstream>
-#include <vector>
 #include <unordered_map>
 #include <string>
 #include <algorithm>
@@ -15,26 +14,21 @@
 #include "messages.h"
 #include "orders.h"
 #include "aliases.h"
+#include "queue.h"
 
 class DataParser {
-    void processDataStream(const std::string filename);
-
-public:
-    const std::string filename;
+    const std::vector<char>& buffer;
 
     // store all messages (to maintain order across types)
-    std::vector < std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>>& messages;
+    ThreadSafeSharedQueue& queue;
 
-    // map stocks to running price bounds and order counts
-    std::unordered_map<StockIndex, StockStats>& stockInfo;
-
+public:
     DataParser(
-        const std::string f,
-        std::vector < std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>>& m,
-        std::unordered_map<StockIndex, StockStats>& s
+        const std::vector<char>& b,
+        ThreadSafeSharedQueue& q
     );
 
-    void getMessageAndStockData();
+    void processDataStream();
 };
 
 #endif

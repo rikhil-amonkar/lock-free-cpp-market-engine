@@ -7,13 +7,13 @@
 #include "aliases.h"
 #include "queue.h"
 
-void ThreadSafeSharedQueue::push(const orderTypes& order) {
+void ThreadSafeSharedQueue::push(const OrderTypes& order) {
     std::lock_guard<std::mutex> lock(mtx);  // lock threads (auto)
     sharedQueue.push(order);
     cv.notify_one();  // tell pop of new data
 }
 
-bool ThreadSafeSharedQueue::pop(orderTypes& output) {
+bool ThreadSafeSharedQueue::pop(OrderTypes& output) {
     std::unique_lock<std::mutex> lock(mtx);  // lock threads (manual)
     cv.wait(lock, [this] { return !sharedQueue.empty() || done; });  // wait until an item is pushed or empty
     if (sharedQueue.empty()) {

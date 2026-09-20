@@ -2,6 +2,7 @@
 #define MESSAGE_TYPES
 
 #include <string>
+#include <variant>
 #include <cstdint>
 
 #include "aliases.h"
@@ -71,5 +72,7 @@ struct ReplaceOrder {
         , newPrice(p) {
     }
 };
+
+using OrderTypes = std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>;
 
 #endif

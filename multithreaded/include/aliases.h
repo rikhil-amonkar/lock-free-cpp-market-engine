@@ -20,6 +20,4 @@ using Price = std::int32_t;
 using PoolIndex = std::uint32_t;
 using StockIndex = std::uint16_t;
 
-using orderTypes = std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>;
-
 #endif

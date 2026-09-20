@@ -1,6 +1,5 @@
 #include <iostream>
 #include <unordered_map>
-#include <vector>
 #include <string>
 #include <cstdint>
 #include <chrono>
@@ -11,6 +10,8 @@
 #include "messages.h"
 #include "orders.h"
 #include "aliases.h"
+#include "queue.h"
+#include "buffer.h"
 
 int main() {
 
@@ -18,16 +19,20 @@ int main() {
 	const std::string filename = "../data/full_mb_sample.bin";
 	std::unordered_map<StockIndex, OrderBook> globalOrderBook;  // book per stock
 
-	// store all messages (to maintain order across types)
-	std::vector<std::variant<AddOrder, ExecuteOrder, CancelOrder, DeleteOrder, ReplaceOrder>> messages;
-
 	// map stocks to running price bounds and order counts
 	std::unordered_map<StockIndex, StockStats> stockInfo;
 
-	DataParser parser(filename, messages, stockInfo);
+	// store file bytes into a buffer storage
+	ByteBuffer storage(filename, stockInfo);
+	const std::vector<char> buffer = storage.createBuffer();
+
+	// thread safe queue for producer/consumer shared use
+	ThreadSafeSharedQueue queue;
 
 	auto start_parse_data = std::chrono::steady_clock::now();
-	parser.getMessageAndStockData();  // parse itch messages
+	DataParser parser(buffer, queue);
+	parser.processDataStream();  // parse itch messages
+	queue.set_done();  // producer flags as complete
 	auto end_parse_data = std::chrono::steady_clock::now();
 
 	auto start_build_books = std::chrono::steady_clock::now();
@@ -39,7 +44,11 @@ int main() {
 
 	// handle book operations from orders
 	auto start_fill_books = std::chrono::steady_clock::now();
-	for (const auto& action : messages) {
+	while (true) {
+		OrderTypes action{ AddOrder{ 0, 0, 'B', 0, 0 } };  // use placeholder for variant constructor
+		if (!queue.pop(action)) {
+			break;
+		}
 
 		// pass type from variant container
 		std::visit(
