@@ -22,6 +22,8 @@ int main() {
 	// map stocks to running price bounds and order counts
 	std::unordered_map<StockIndex, StockStats> stockInfo;
 
+	auto start_parse_data = std::chrono::steady_clock::now();
+
 	// store file bytes into a buffer storage
 	ByteBuffer storage(filename, stockInfo);
 	const std::vector<char> buffer = storage.createBuffer();
@@ -29,21 +31,24 @@ int main() {
 	// thread safe queue for producer/consumer shared use
 	ThreadSafeSharedQueue queue;
 
-	auto start_parse_data = std::chrono::steady_clock::now();
 	DataParser parser(buffer, queue);
 	parser.processDataStream();  // parse itch messages
 	queue.set_done();  // producer flags as complete
+
 	auto end_parse_data = std::chrono::steady_clock::now();
 
 	auto start_build_books = std::chrono::steady_clock::now();
+
 	globalOrderBook.reserve(stockInfo.size());  // pre-allocate to num unique stocks
 	for (const auto& [index, stats] : stockInfo) {
 		globalOrderBook.emplace(index, OrderBook{ stats });  // store
 	}
+
 	auto end_build_books = std::chrono::steady_clock::now();
 
 	// handle book operations from orders
 	auto start_fill_books = std::chrono::steady_clock::now();
+
 	while (true) {
 		OrderTypes action{ AddOrder{ 0, 0, 'B', 0, 0 } };  // use placeholder for variant constructor
 		if (!queue.pop(action)) {
@@ -79,6 +84,7 @@ int main() {
 			},
 			action);  // apply to iteration
 	}
+
 	auto end_fill_books = std::chrono::steady_clock::now();
 
 	// for (auto& [index, book] : globalOrderBook) {
