@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <chrono>
 #include <variant>
+#include <thread>
 
 #include "parser.h"
 #include "book.h"
@@ -13,43 +14,14 @@
 #include "queue.h"
 #include "buffer.h"
 
-int main() {
-
-	// const std::string filename = "../data/100_mb_sample.bin";
-	const std::string filename = "../data/full_mb_sample.bin";
-	std::unordered_map<StockIndex, OrderBook> globalOrderBook;  // book per stock
-
-	// map stocks to running price bounds and order counts
-	std::unordered_map<StockIndex, StockStats> stockInfo;
-
-	auto start_parse_data = std::chrono::steady_clock::now();
-
-	// store file bytes into a buffer storage
-	ByteBuffer storage(filename, stockInfo);
-	const std::vector<char> buffer = storage.createBuffer();
-
-	// thread safe queue for producer/consumer shared use
-	ThreadSafeSharedQueue queue;
-
+void producer(const std::vector<char>& buffer, ThreadSafeSharedQueue& queue) {
 	DataParser parser(buffer, queue);
 	parser.processDataStream();  // parse itch messages
 	queue.set_done();  // producer flags as complete
+}
 
-	auto end_parse_data = std::chrono::steady_clock::now();
-
-	auto start_build_books = std::chrono::steady_clock::now();
-
-	globalOrderBook.reserve(stockInfo.size());  // pre-allocate to num unique stocks
-	for (const auto& [index, stats] : stockInfo) {
-		globalOrderBook.emplace(index, OrderBook{ stats });  // store
-	}
-
-	auto end_build_books = std::chrono::steady_clock::now();
-
-	// handle book operations from orders
-	auto start_fill_books = std::chrono::steady_clock::now();
-
-	while (true) {
+void consumer(std::unordered_map<StockIndex, OrderBook>& globalOrderBook, ThreadSafeSharedQueue& queue) {
+	while (true) {  // handle book operations
 		OrderTypes action{ AddOrder{ 0, 0, 'B', 0, 0 } };  // use placeholder for variant constructor
 		if (!queue.pop(action)) {
 			break;
@@ -84,22 +56,56 @@ int main() {
 			},
 			action);  // apply to iteration
 	}
+}
 
-	auto end_fill_books = std::chrono::steady_clock::now();
+int main() {
+
+	// const std::string filename = "../data/100_mb_sample.bin";
+	const std::string filename = "../data/full_mb_sample.bin";
+	std::unordered_map<StockIndex, OrderBook> globalOrderBook;  // book per stock
+
+	// map stocks to running price bounds and order counts
+	std::unordered_map<StockIndex, StockStats> stockInfo;
+
+	// thread safe queue for producer/consumer shared use
+	ThreadSafeSharedQueue queue;
+
+	// store file bytes into a buffer storage
+	auto start_init_buffer = std::chrono::steady_clock::now();
+	ByteBuffer storage(filename, stockInfo);
+	const std::vector<char> buffer = storage.createBuffer();
+	auto end_init_buffer = std::chrono::steady_clock::now();
+
+	auto start_build_books = std::chrono::steady_clock::now();
+	globalOrderBook.reserve(stockInfo.size());  // pre-allocate to num unique stocks
+	for (const auto& [index, stats] : stockInfo) {
+		globalOrderBook.emplace(index, OrderBook{ stats });  // store
+	}
+	auto end_build_books = std::chrono::steady_clock::now();
+
+	// starts seperate thread work on queue
+	std::thread t1(producer, std::ref(buffer), std::ref(queue));  // push to queue
+	std::thread t2(consumer, std::ref(globalOrderBook), std::ref(queue));  // pop from queue
+
+	auto start_parse_and_fill_multithread = std::chrono::steady_clock::now();
+	// make the main thread wait for both to finish
+	t1.join();
+	t2.join();
+	auto end_parse_and_fill_multithread = std::chrono::steady_clock::now();
 
 	// for (auto& [index, book] : globalOrderBook) {
 	// 	book.printAllOrders();
 	// }
 
 	// record runtimes for each part
-	auto parse_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_parse_data - start_parse_data);
+	auto parse_to_buffer_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_init_buffer - start_init_buffer);
 	auto build_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_build_books - start_build_books);
-	auto fill_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_fill_books - start_fill_books);
+	auto multithread_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_parse_and_fill_multithread - start_parse_and_fill_multithread);
 
 	std::cout << "Total Runtimes:\n"
-		<< "ITCH DATA PARSE: " << parse_time_ms.count() << " ms\n"
-		<< "BUILD EMPTY BOOKS: " << build_time_ms.count() << " ms\n"
-		<< "SIMULATE ORDERS: " << fill_time_ms.count() << " ms\n";
+		<< "INIT BUFFER FILL: " << parse_to_buffer_ms.count() << " ms\n"
+		<< "BUILD EMPTY BOOKS: " << build_time_ms.count() << "ms\n"
+		<< "SIMULATE ORDERS (MULTITHREAD): " << multithread_time_ms.count() << " ms\n";
 
 	return 0;
 }
